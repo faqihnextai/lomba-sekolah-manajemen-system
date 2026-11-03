@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\SchoolCompetitionSetting;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -21,11 +22,31 @@ class EnsureUserHasProgram
             404,
         );
 
+        if ($user?->hasRole('superadmin')) {
+            return $next($request);
+        }
+
+        $isActive = $user?->school_id
+            ? SchoolCompetitionSetting::query()
+                ->where('school_id', $user->school_id)
+                ->where('program', $requestedProgram)
+                ->value('enabled')
+            : null;
+
         abort_unless(
-            $user && ($user->hasRole('superadmin') || $user->program === $requestedProgram),
+            (bool) $isActive,
             403,
-            'Anda tidak memiliki akses ke kategori lomba ini.',
+            'Lomba ini sedang tidak diaktifkan.',
         );
+
+        $hasAccess = $user?->hasRole('admin')
+            || $user?->competitionAccesses()->where('program', $requestedProgram)->exists()
+            || (
+                $user?->competitionAccesses()->doesntExist()
+                && $user?->program === $requestedProgram
+            );
+
+        abort_unless($hasAccess, 403, 'Anda tidak memiliki akses ke kategori lomba ini.');
 
         return $next($request);
     }

@@ -1,8 +1,11 @@
 <?php
 
 use App\Models\User;
+use App\Support\CompetitionCatalog;
+use App\Support\SchoolRegistry;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules;
@@ -17,6 +20,10 @@ new #[Layout('layouts.guest')] class extends Component
 
     public string $email = '';
 
+    public string $school_name = '';
+
+    public string $school_code = '';
+
     public string $password = '';
 
     public string $password_confirmation = '';
@@ -27,19 +34,42 @@ new #[Layout('layouts.guest')] class extends Component
     /**
      * Handle an incoming registration request.
      */
-    public function register(): void
+    public function register(SchoolRegistry $schools, CompetitionCatalog $catalog): void
     {
         $validated = $this->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'lowercase', 'email', 'max:255', 'unique:'.User::class],
+            'school_name' => ['required', 'string', 'max:255'],
+            'school_code' => ['required', 'string', 'max:20', 'regex:/^[A-Za-z0-9-]+$/'],
             'password' => ['required', 'string', 'confirmed', Rules\Password::defaults()],
             'program' => ['required', 'string', Rule::in(array_keys(config('competitions.programs', [])))],
         ]);
 
         $validated['password'] = Hash::make($validated['password']);
 
-        event(new Registered($user = User::create($validated)));
-        $user->assignRole(Role::findOrCreate('guru', 'web'));
+        $user = DB::transaction(function () use ($validated, $schools, $catalog): User {
+            $school = $schools->findOrCreate($validated['school_name'], $validated['school_code']);
+            $user = User::create([
+                'name' => $validated['name'],
+                'email' => $validated['email'],
+                'password' => $validated['password'],
+                'program' => $validated['program'],
+                'school_id' => $school->id,
+            ]);
+
+            $user->assignRole(Role::findOrCreate('guru', 'web'));
+
+            foreach ($catalog->moduleKeys($validated['program']) as $moduleKey) {
+                $user->competitionAccesses()->create([
+                    'program' => $validated['program'],
+                    'module_key' => $moduleKey,
+                ]);
+            }
+
+            return $user;
+        });
+
+        event(new Registered($user));
 
         Auth::login($user);
 
@@ -84,6 +114,18 @@ new #[Layout('layouts.guest')] class extends Component
                             name="password_confirmation" required autocomplete="new-password" />
 
             <x-input-error :messages="$errors->get('password_confirmation')" class="mt-2" />
+        </div>
+
+        <div class="mt-4">
+            <x-input-label for="school_name" :value="__('Nama Sekolah')" />
+            <x-text-input wire:model="school_name" id="school_name" class="block mt-1 w-full" type="text" name="school_name" required maxlength="255" autocomplete="organization" />
+            <x-input-error :messages="$errors->get('school_name')" class="mt-2" />
+        </div>
+
+        <div class="mt-4">
+            <x-input-label for="school_code" :value="__('Kode Sekolah')" />
+            <x-text-input wire:model="school_code" id="school_code" class="block mt-1 w-full" type="text" name="school_code" required maxlength="20" placeholder="Contoh: DAHU" />
+            <x-input-error :messages="$errors->get('school_code')" class="mt-2" />
         </div>
 
         <div class="mt-4">

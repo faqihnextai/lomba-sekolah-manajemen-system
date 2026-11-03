@@ -1,8 +1,11 @@
 <?php
 
-use App\Http\Controllers\AdminController;
+use App\Http\Controllers\AdminTeacherAccessController;
+use App\Http\Controllers\DocumentPresetController;
 use App\Http\Controllers\ManajemenUserController;
+use App\Http\Controllers\SchoolCompetitionController;
 use App\Http\Controllers\SettingsDocumentController;
+use App\Http\Controllers\SuperAdminCompetitionController;
 use App\Http\Controllers\UserPortalController;
 use Illuminate\Support\Facades\Route;
 
@@ -14,47 +17,84 @@ Route::view('/select-lomba', 'SelectLomba')
     ->name('select-lomba');
 
 Route::middleware(['auth', 'verified'])
+    ->prefix('super-admin')
+    ->name('super-admin.')
+    ->group(function () {
+        Route::middleware('user.role:superadmin')->group(function () {
+            Route::get('/setting-dokumen', [SettingsDocumentController::class, 'index'])
+                ->name('setting-dokumen');
+            Route::get('/manajemen-user', [ManajemenUserController::class, 'index'])
+                ->name('manajemen-user');
+            Route::post('/manajemen-user', [ManajemenUserController::class, 'store'])
+                ->name('manajemen-user.store');
+            Route::patch('/manajemen-user/{user}/role', [ManajemenUserController::class, 'updateRole'])
+                ->name('manajemen-user.update-role');
+
+            Route::get('/competitions/{program}', [SuperAdminCompetitionController::class, 'show'])
+                ->name('competition');
+            Route::patch('/schools/{school}/competitions/{program}/status', [SchoolCompetitionController::class, 'updateForSuperAdmin'])
+                ->name('school.competition.status');
+        });
+    });
+
+Route::middleware(['auth', 'verified'])
     ->prefix('admin')
     ->name('admin.')
     ->group(function () {
-
-        // Setting Dokumen
         Route::get('/setting-dokumen', [SettingsDocumentController::class, 'index'])
-            ->middleware('user.role:superadmin')
+            ->middleware('user.role:admin,superadmin')
             ->name('setting-dokumen');
 
-        // Hak Akses
-        Route::get('/manajemen-user', [ManajemenUserController::class, 'index'])
-            ->middleware('user.role:superadmin')
-            ->name('manajemen-user');
+        Route::get('/akses-guru', [AdminTeacherAccessController::class, 'index'])
+            ->middleware('user.role:admin')
+            ->name('akses-guru');
 
-        Route::post('/manajemen-user', [ManajemenUserController::class, 'store'])
-            ->middleware('user.role:superadmin')
-            ->name('manajemen-user.store');
+        Route::post('/akses-guru', [AdminTeacherAccessController::class, 'store'])
+            ->middleware('user.role:admin')
+            ->name('akses-guru.store');
 
-        Route::patch('/manajemen-user/{user}/role', [ManajemenUserController::class, 'updateRole'])
-            ->middleware('user.role:superadmin')
-            ->name('manajemen-user.update-role');
+        Route::patch('/competitions/{program}/status', [SchoolCompetitionController::class, 'updateForAdmin'])
+            ->middleware('user.role:admin')
+            ->name('competition.status');
 
-        // Menu Pengerjaan Lomba
-        Route::get('/lomba-adiwiyata', [AdminController::class, 'lombaAdiwiyata'])
-            ->middleware('user.program:adiwiyata')
-            ->name('lomba-adiwiyata');
+        Route::patch('/akses-guru/{teacher}', [AdminTeacherAccessController::class, 'update'])
+            ->middleware('user.role:admin')
+            ->name('akses-guru.update');
 
-        Route::get('/lomba-kantin-sehat', [AdminController::class, 'lombaKantinSehat'])
-            ->middleware('user.program:kantin-sehat')
-            ->name('lomba-kantin-sehat');
-
-        Route::get('/lomba-sekolah-sehat', [AdminController::class, 'lombaSekolahSehat'])
-            ->middleware('user.program:sekolah-sehat')
-            ->name('lomba-sekolah-sehat');
-
-        Route::view('/lomba-literasi', 'admin.lomba-literasi-sekolah')
-            ->middleware('user.program:literasi')
-            ->name('lomba-literasi');
+        Route::get('/competitions/{program}', [UserPortalController::class, 'pengerjaanDokumen'])
+            ->middleware('user.role:admin')
+            ->middleware('user.program')
+            ->name('competition');
     });
 
-// Dashboard
+Route::middleware(['auth', 'verified', 'user.role:admin,superadmin'])
+    ->prefix('document-presets')
+    ->name('document-presets.')
+    ->group(function () {
+        Route::post('/', [DocumentPresetController::class, 'store'])
+            ->name('store');
+        Route::post('/templates', [DocumentPresetController::class, 'storeTemplate'])
+            ->name('templates.store');
+        Route::delete('/{preset}', [DocumentPresetController::class, 'destroy'])
+            ->name('destroy');
+        Route::patch('/{preset}/template', [DocumentPresetController::class, 'updateTemplate'])
+            ->name('templates.update');
+        Route::get('/{preset}/template', [DocumentPresetController::class, 'showTemplate'])
+            ->name('templates.show');
+        Route::get('/{preset}/canvas', [DocumentPresetController::class, 'canvas'])
+            ->name('canvas');
+        Route::patch('/{preset}', [DocumentPresetController::class, 'update'])
+            ->name('update');
+        Route::post('/{preset}/assets', [DocumentPresetController::class, 'uploadAsset'])
+            ->name('assets.store');
+        Route::delete('/{preset}/assets/{file}', [DocumentPresetController::class, 'destroyAsset'])
+            ->name('assets.destroy');
+        Route::post('/{preset}/exports', [DocumentPresetController::class, 'storeExport'])
+            ->name('exports.store');
+        Route::get('/{preset}/files/{file}', [DocumentPresetController::class, 'showFile'])
+            ->name('files.show');
+    });
+
 Route::get('/dashboard', [UserPortalController::class, 'dashboard'])
     ->middleware(['auth', 'verified'])
     ->name('dashboard');
@@ -68,7 +108,6 @@ Route::middleware(['auth', 'verified'])
             ->name('pengerjaan-dokumen');
     });
 
-// Profile
 Route::view('/profile', 'profile')
     ->middleware(['auth'])
     ->name('profile');

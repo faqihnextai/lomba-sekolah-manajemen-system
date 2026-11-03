@@ -2,9 +2,9 @@
 
 namespace Tests\Feature;
 
+use App\Models\School;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Livewire\Volt\Volt;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
@@ -20,11 +20,16 @@ class UserPortalTest extends TestCase
             ->assertDontSee(route('register'), false);
     }
 
-    public function test_user_dashboard_only_shows_the_assigned_competition(): void
+    public function test_user_dashboard_only_shows_assigned_active_competitions(): void
     {
         Role::create(['name' => 'guru', 'guard_name' => 'web']);
-        $user = User::factory()->create(['program' => 'adiwiyata']);
+        $school = $this->createSchoolWithEnabledPrograms(['adiwiyata']);
+        $user = User::factory()->create(['program' => 'adiwiyata', 'school_id' => $school->id]);
         $user->assignRole('guru');
+        $user->competitionAccesses()->create([
+            'program' => 'adiwiyata',
+            'module_key' => 'persyaratan-administrasi-pengusulan',
+        ]);
 
         $this->actingAs($user)
             ->get(route('dashboard'))
@@ -33,7 +38,7 @@ class UserPortalTest extends TestCase
             ->assertDontSee('Kantin Sehat');
     }
 
-    public function test_superadmin_navigation_shows_all_admin_sections(): void
+    public function test_superadmin_navigation_shows_superadmin_sections_and_active_competitions(): void
     {
         Role::create(['name' => 'superadmin', 'guard_name' => 'web']);
         $superadmin = User::factory()->create();
@@ -42,38 +47,82 @@ class UserPortalTest extends TestCase
         $this->actingAs($superadmin)
             ->get(route('dashboard'))
             ->assertOk()
-            ->assertSee('href="'.route('admin.setting-dokumen').'"', false)
-            ->assertSee('href="'.route('admin.manajemen-user').'"', false)
-            ->assertSee('href="'.route('admin.lomba-adiwiyata').'"', false)
-            ->assertSee('href="'.route('admin.lomba-literasi').'"', false);
+            ->assertSee('href="'.route('super-admin.setting-dokumen').'"', false)
+            ->assertSee('href="'.route('super-admin.manajemen-user').'"', false)
+            ->assertSee('href="'.route('super-admin.competition', ['program' => 'adiwiyata']).'"', false)
+            ->assertSee('href="'.route('super-admin.competition', ['program' => 'literasi']).'"', false);
     }
 
-    public function test_regular_user_navigation_only_shows_assigned_work(): void
+    public function test_guru_navigation_only_shows_assigned_work(): void
     {
         Role::create(['name' => 'guru', 'guard_name' => 'web']);
-        $user = User::factory()->create(['program' => 'adiwiyata']);
+        $school = $this->createSchoolWithEnabledPrograms(['adiwiyata']);
+        $user = User::factory()->create(['program' => 'adiwiyata', 'school_id' => $school->id]);
         $user->assignRole('guru');
+        $user->competitionAccesses()->create([
+            'program' => 'adiwiyata',
+            'module_key' => 'persyaratan-administrasi-pengusulan',
+        ]);
 
         $this->actingAs($user)
             ->get(route('dashboard'))
             ->assertOk()
             ->assertSee('href="'.route('user.pengerjaan-dokumen', ['program' => 'adiwiyata']).'"', false)
-            ->assertDontSee('href="'.route('admin.manajemen-user').'"', false)
+            ->assertDontSee('href="'.route('admin.akses-guru').'"', false)
             ->assertDontSee('href="'.route('admin.setting-dokumen').'"', false);
     }
 
-    public function test_user_can_open_only_the_assigned_competition(): void
+    public function test_guru_can_open_an_assigned_program_and_sees_only_assigned_modules(): void
     {
         Role::create(['name' => 'guru', 'guard_name' => 'web']);
-        $user = User::factory()->create(['program' => 'adiwiyata']);
+        $school = $this->createSchoolWithEnabledPrograms(['adiwiyata']);
+        $user = User::factory()->create(['program' => 'adiwiyata', 'school_id' => $school->id]);
         $user->assignRole('guru');
+        $user->competitionAccesses()->create([
+            'program' => 'adiwiyata',
+            'module_key' => 'persyaratan-administrasi-pengusulan',
+        ]);
 
         $this->actingAs($user)
             ->get(route('user.pengerjaan-dokumen', ['program' => 'adiwiyata']))
             ->assertOk()
-            ->assertSee('Program Sekolah Adiwiyata (GPBLHS)');
+            ->assertSee('Persyaratan')
+            ->assertDontSee('Perencanaan Gerakan PBLHS');
+    }
 
-        $this->get(route('user.pengerjaan-dokumen', ['program' => 'literasi']))
+    public function test_guru_cannot_open_an_unassigned_program(): void
+    {
+        Role::create(['name' => 'guru', 'guard_name' => 'web']);
+        $school = $this->createSchoolWithEnabledPrograms(['adiwiyata', 'literasi']);
+        $user = User::factory()->create(['program' => 'adiwiyata', 'school_id' => $school->id]);
+        $user->assignRole('guru');
+        $user->competitionAccesses()->create([
+            'program' => 'adiwiyata',
+            'module_key' => 'persyaratan-administrasi-pengusulan',
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('user.pengerjaan-dokumen', ['program' => 'literasi']))
+            ->assertForbidden();
+    }
+
+    public function test_guru_cannot_open_a_disabled_competition(): void
+    {
+        Role::create(['name' => 'guru', 'guard_name' => 'web']);
+        $school = School::create(['name' => 'Daarul Huda', 'code' => 'DAHU']);
+        $user = User::factory()->create(['program' => 'adiwiyata', 'school_id' => $school->id]);
+        $user->assignRole('guru');
+        $user->competitionAccesses()->create([
+            'program' => 'adiwiyata',
+            'module_key' => 'persyaratan-administrasi-pengusulan',
+        ]);
+        $school->competitionSettings()->create([
+            'program' => 'adiwiyata',
+            'enabled' => false,
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('user.pengerjaan-dokumen', ['program' => 'adiwiyata']))
             ->assertForbidden();
     }
 
@@ -89,20 +138,20 @@ class UserPortalTest extends TestCase
             ->assertSee('Gerakan Literasi Sekolah (GLS)');
     }
 
-    public function test_registration_stores_the_selected_competition_and_assigns_guru_role(): void
+    /**
+     * @param  list<string>  $programs
+     */
+    private function createSchoolWithEnabledPrograms(array $programs): School
     {
-        Volt::test('pages.auth.register')
-            ->set('name', 'Guru Literasi')
-            ->set('email', 'guru.literasi@example.com')
-            ->set('password', 'password123')
-            ->set('password_confirmation', 'password123')
-            ->set('program', 'literasi')
-            ->call('register')
-            ->assertHasNoErrors();
+        $school = School::create(['name' => 'Daarul Huda', 'code' => 'DAHU']);
 
-        $user = User::where('email', 'guru.literasi@example.com')->firstOrFail();
+        foreach ($programs as $program) {
+            $school->competitionSettings()->create([
+                'program' => $program,
+                'enabled' => true,
+            ]);
+        }
 
-        $this->assertSame('literasi', $user->program);
-        $this->assertTrue($user->hasRole('guru'));
+        return $school;
     }
 }

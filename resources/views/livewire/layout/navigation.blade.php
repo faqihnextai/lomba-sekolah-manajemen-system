@@ -1,10 +1,18 @@
 <?php
 
 use App\Livewire\Actions\Logout;
+use App\Support\CompetitionCatalog;
 use Livewire\Volt\Component;
 
 new class extends Component
 {
+    public array $programs = [];
+
+    public function mount(CompetitionCatalog $catalog): void
+    {
+        $this->programs = $catalog->forUser(auth()->user());
+    }
+
     public function logout(Logout $logout): void
     {
         $logout();$this->redirect('/', navigate: true);
@@ -32,29 +40,31 @@ new class extends Component
                     </x-nav-link>
 
                     @if (auth()->user()->hasRole('superadmin'))
+                        <x-nav-link :href="route('super-admin.setting-dokumen')" :active="request()->routeIs('super-admin.setting-dokumen')" wire:navigate>
+                            {{ __('Setting Dokumen') }}
+                        </x-nav-link>
+                        <x-nav-link :href="route('super-admin.manajemen-user')" :active="request()->routeIs('super-admin.manajemen-user')" wire:navigate>
+                            {{ __('Manajemen User') }}
+                        </x-nav-link>
+                    @elseif (auth()->user()->hasRole('admin'))
                         <x-nav-link :href="route('admin.setting-dokumen')" :active="request()->routeIs('admin.setting-dokumen')" wire:navigate>
                             {{ __('Setting Dokumen') }}
                         </x-nav-link>
-                        <x-nav-link :href="route('admin.manajemen-user')" :active="request()->routeIs('admin.manajemen-user')" wire:navigate>
-                            {{ __('Manajemen User') }}
-                        </x-nav-link>
-                        <x-nav-link :href="route('admin.lomba-adiwiyata')" :active="request()->routeIs('admin.lomba-adiwiyata')" wire:navigate>
-                            {{ __('Adiwiyata') }}
-                        </x-nav-link>
-                        <x-nav-link :href="route('admin.lomba-kantin-sehat')" :active="request()->routeIs('admin.lomba-kantin-sehat')" wire:navigate>
-                            {{ __('Kantin Sehat') }}
-                        </x-nav-link>
-                        <x-nav-link :href="route('admin.lomba-sekolah-sehat')" :active="request()->routeIs('admin.lomba-sekolah-sehat')" wire:navigate>
-                            {{ __('Sekolah Sehat') }}
-                        </x-nav-link>
-                        <x-nav-link :href="route('admin.lomba-literasi')" :active="request()->routeIs('admin.lomba-literasi')" wire:navigate>
-                            {{ __('Literasi') }}
-                        </x-nav-link>
-                    @elseif (auth()->user()->program)
-                        <x-nav-link :href="route('user.pengerjaan-dokumen', ['program' => auth()->user()->program])" :active="request()->routeIs('user.pengerjaan-dokumen')" wire:navigate>
-                            {{ __('Pengerjaan Dokumen') }}
+                        <x-nav-link :href="route('admin.akses-guru')" :active="request()->routeIs('admin.akses-guru*')" wire:navigate>
+                            {{ __('Akses Guru') }}
                         </x-nav-link>
                     @endif
+
+                    @foreach ($programs as $programKey => $competition)
+                        @php
+                            $competitionRoute = auth()->user()->hasRole('superadmin')
+                                ? 'super-admin.competition'
+                                : (auth()->user()->hasRole('admin') ? 'admin.competition' : 'user.pengerjaan-dokumen');
+                        @endphp
+                        <x-nav-link :href="route($competitionRoute, ['program' => $programKey])" :active="request()->routeIs($competitionRoute)" wire:navigate>
+                            {{ $competition['label'] }}
+                        </x-nav-link>
+                    @endforeach
                 </div>
             </div>
 
@@ -113,29 +123,30 @@ new class extends Component
                 {{ __('Dashboard') }}
             </x-responsive-nav-link>
             @if (auth()->user()->hasRole('superadmin'))
+                <x-responsive-nav-link :href="route('super-admin.setting-dokumen')" :active="request()->routeIs('super-admin.setting-dokumen')" wire:navigate>
+                    {{ __('Setting Dokumen') }}
+                </x-responsive-nav-link>
+                <x-responsive-nav-link :href="route('super-admin.manajemen-user')" :active="request()->routeIs('super-admin.manajemen-user')" wire:navigate>
+                    {{ __('Manajemen User') }}
+                </x-responsive-nav-link>
+            @elseif (auth()->user()->hasRole('admin'))
                 <x-responsive-nav-link :href="route('admin.setting-dokumen')" :active="request()->routeIs('admin.setting-dokumen')" wire:navigate>
                     {{ __('Setting Dokumen') }}
                 </x-responsive-nav-link>
-                <x-responsive-nav-link :href="route('admin.manajemen-user')" :active="request()->routeIs('admin.manajemen-user')" wire:navigate>
-                    {{ __('Manajemen User') }}
-                </x-responsive-nav-link>
-                <x-responsive-nav-link :href="route('admin.lomba-adiwiyata')" :active="request()->routeIs('admin.lomba-adiwiyata')" wire:navigate>
-                    {{ __('Adiwiyata') }}
-                </x-responsive-nav-link>
-                <x-responsive-nav-link :href="route('admin.lomba-kantin-sehat')" :active="request()->routeIs('admin.lomba-kantin-sehat')" wire:navigate>
-                    {{ __('Kantin Sehat') }}
-                </x-responsive-nav-link>
-                <x-responsive-nav-link :href="route('admin.lomba-sekolah-sehat')" :active="request()->routeIs('admin.lomba-sekolah-sehat')" wire:navigate>
-                    {{ __('Sekolah Sehat') }}
-                </x-responsive-nav-link>
-                <x-responsive-nav-link :href="route('admin.lomba-literasi')" :active="request()->routeIs('admin.lomba-literasi')" wire:navigate>
-                    {{ __('Literasi') }}
-                </x-responsive-nav-link>
-            @elseif (auth()->user()->program)
-                <x-responsive-nav-link :href="route('user.pengerjaan-dokumen', ['program' => auth()->user()->program])" :active="request()->routeIs('user.pengerjaan-dokumen')" wire:navigate>
-                    {{ __('Pengerjaan Dokumen') }}
+                <x-responsive-nav-link :href="route('admin.akses-guru')" :active="request()->routeIs('admin.akses-guru*')" wire:navigate>
+                    {{ __('Akses Guru') }}
                 </x-responsive-nav-link>
             @endif
+            @foreach ($programs as $programKey => $competition)
+                @php
+                    $competitionRoute = auth()->user()->hasRole('superadmin')
+                        ? 'super-admin.competition'
+                        : (auth()->user()->hasRole('admin') ? 'admin.competition' : 'user.pengerjaan-dokumen');
+                @endphp
+                <x-responsive-nav-link :href="route($competitionRoute, ['program' => $programKey])" :active="request()->routeIs($competitionRoute)" wire:navigate>
+                    {{ $competition['label'] }}
+                </x-responsive-nav-link>
+            @endforeach
             
         </div>
 

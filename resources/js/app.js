@@ -1,1 +1,1 @@
-//
+import './document-editor';
